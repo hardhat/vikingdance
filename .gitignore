@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.env
+.env
+venv/
+ENV/
+*.egg-info/
+
+# FastAPI/uvicorn
+*.log
+
+# VSCode
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compiled files
+*.iso
+
+djui/__pycache__/
+
+# Backup files
+*~
+*.bak
+
+# Misc
+*.swp
+*.swo

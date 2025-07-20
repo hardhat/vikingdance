@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Necklace Control Panel</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    form { margin-bottom: 2rem; }
+    input[type="number"] { width: 4em; }
+    button { margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1><img src="/static/axehead.jpg" height=32 alt="Axehead"> Viking Necklace Control Panel</h1>
+  <form action="/send" method="post">
+    <label>Pattern: <input name="pattern" type="number" value="0" /></label><br>
+    <label>Primary Color: 
+      R <input name="primary_r" type="number" value="255" />
+      G <input name="primary_g" type="number" value="0" />
+      B <input name="primary_b" type="number" value="0" />
+    </label><br>
+    <label>Secondary Color: 
+      R <input name="secondary_r" type="number" value="0" />
+      G <input name="secondary_g" type="number" value="0" />
+      B <input name="secondary_b" type="number" value="255" />
+    </label><br>
+    <label>BPM: <input name="bpm" type="number" value="120" /></label><br>
+    <label>Flags: <input name="flags" type="number" value="0" /></label><br>
+    <button type="submit">Send Pattern</button>
+  </form>
+
+  <form action="/dark" method="post"><button>Go Dark</button></form>
+  <form action="/rssi" method="post"><button>Request RSSI</button></form>
+  <form action="/sleep" method="post"><button>Put to Sleep</button></form>
+</body>
+</html>
