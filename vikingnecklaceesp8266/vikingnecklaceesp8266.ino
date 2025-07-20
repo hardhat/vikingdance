@@ -95,7 +95,7 @@ void onReceive(uint8_t* mac, uint8_t* data, uint8_t len) {
         // Pattern command received
         break;
       case 2:
-        sendRSSI();
+        sendRSSI(mac); // Pass requester MAC
         break;
       case 3:
         enterDeepSleep();
@@ -138,20 +138,18 @@ void enterDeepSleep() {
   ESP.deepSleep(0);  // Sleep until reset
 }
 
-void sendRSSI() {
+void sendRSSI(uint8_t* destMac) {
   int n = WiFi.scanNetworks();
   if (n == 0) {
     Serial.println("No networks found");
     return;
   }
-  // Prepare a buffer for up to 8 strongest networks
   struct {
     uint8_t mac[6];
     int8_t rssi;
     uint8_t channel;
   } results[8];
   int count = min(n, 8);
-  // Sort by RSSI (strongest first)
   int idx[32];
   for (int i = 0; i < n; i++) idx[i] = i;
   for (int i = 0; i < n-1; i++) {
@@ -166,8 +164,7 @@ void sendRSSI() {
     results[i].rssi = WiFi.RSSI(idx[i]);
     results[i].channel = WiFi.channel(idx[i]);
   }
-  // Send the results as a packed array
-  esp_now_send(broadcastAddress, (uint8_t*)results, count * sizeof(results[0]));
+  esp_now_send(destMac, (uint8_t*)results, count * sizeof(results[0]));
   WiFi.scanDelete();
 }
 
