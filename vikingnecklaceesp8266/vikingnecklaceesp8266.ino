@@ -139,8 +139,36 @@ void enterDeepSleep() {
 }
 
 void sendRSSI() {
-  int rssi = WiFi.RSSI();
-  esp_now_send(broadcastAddress, (uint8_t*)&rssi, sizeof(rssi));
+  int n = WiFi.scanNetworks();
+  if (n == 0) {
+    Serial.println("No networks found");
+    return;
+  }
+  // Prepare a buffer for up to 8 strongest networks
+  struct {
+    uint8_t mac[6];
+    int8_t rssi;
+    uint8_t channel;
+  } results[8];
+  int count = min(n, 8);
+  // Sort by RSSI (strongest first)
+  int idx[32];
+  for (int i = 0; i < n; i++) idx[i] = i;
+  for (int i = 0; i < n-1; i++) {
+    for (int j = i+1; j < n; j++) {
+      if (WiFi.RSSI(idx[j]) > WiFi.RSSI(idx[i])) {
+        int t = idx[i]; idx[i] = idx[j]; idx[j] = t;
+      }
+    }
+  }
+  for (int i = 0; i < count; i++) {
+    WiFi.BSSID(idx[i], results[i].mac);
+    results[i].rssi = WiFi.RSSI(idx[i]);
+    results[i].channel = WiFi.channel(idx[i]);
+  }
+  // Send the results as a packed array
+  esp_now_send(broadcastAddress, (uint8_t*)results, count * sizeof(results[0]));
+  WiFi.scanDelete();
 }
 
 void runLocalPatternCycle() {
