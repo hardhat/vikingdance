@@ -176,9 +176,47 @@ void runLocalPatternCycle() {
 }
 
 void runPattern(struct_command cmd) {
-  // Placeholder: implement chase, flash, twinkle based on cmd.pattern
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2]);
+  switch (cmd.pattern) {
+    case 0: // Chase
+      static uint8_t chasePos = 0;
+      for (int i = 0; i < NUM_LEDS; i++) {
+        if (i == chasePos) {
+          leds[i] = CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2]);
+        } else {
+          leds[i] = CRGB(cmd.secondary[0], cmd.secondary[1], cmd.secondary[2]);
+        }
+      }
+      chasePos = (chasePos + 1) % NUM_LEDS;
+      break;
+    case 1: // Flash
+      static bool flashOn = false;
+      flashOn = !flashOn;
+      for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = flashOn ? CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2])
+                         : CRGB(cmd.secondary[0], cmd.secondary[1], cmd.secondary[2]);
+      }
+      break;
+    case 2: // Twinkle
+      for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = (random(2) == 0) ? CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2])
+                                  : CRGB(cmd.secondary[0], cmd.secondary[1], cmd.secondary[2]);
+      }
+      break;
+    case 3: // Fade
+      static uint8_t fadeVal = 0;
+      static int fadeDir = 1;
+      fadeVal += fadeDir * 8;
+      if (fadeVal == 0 || fadeVal >= 255) fadeDir = -fadeDir;
+      for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = blend(CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2]),
+                        CRGB(cmd.secondary[0], cmd.secondary[1], cmd.secondary[2]), fadeVal);
+      }
+      break;
+    default: // Solid primary
+      for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2]);
+      }
+      break;
   }
   FastLED.show();
 }
