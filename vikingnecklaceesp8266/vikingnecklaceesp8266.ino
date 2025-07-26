@@ -39,6 +39,12 @@ typedef struct struct_command {
 
 struct_command currentCommand;
 
+unsigned long lastPatternUpdate = 0;
+unsigned long patternInterval = 50; // Default ms
+
+bool rssiScanRequested = false;
+uint8_t rssiScanDestMac[6];
+
 void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);  // GPIO0
   pinMode(LED_BUILTIN, OUTPUT);
@@ -74,10 +80,56 @@ void setup() {
 void loop() {
   handleButton();
 
-  if (localMode) {
-    runLocalPatternCycle();  // Placeholder
+  // Set pattern interval based on BPM
+  if (currentCommand.bpm > 0) {
+    patternInterval = 60000UL / currentCommand.bpm;
   } else {
-    runPattern(currentCommand);  // Apply active command
+    patternInterval = 50; // fallback default
+  }
+
+  unsigned long now = millis();
+  if (localMode) {
+    if (now - lastPatternUpdate >= patternInterval) {
+      runLocalPatternCycle();
+      lastPatternUpdate = now;
+    }
+  } else {
+    if (now - lastPatternUpdate >= patternInterval) {
+      runPattern(currentCommand);
+      lastPatternUpdate = now;
+    }
+  }
+
+  // Handle asynchronous RSSI scan
+  int scanStatus = WiFi.scanComplete();
+  if (rssiScanRequested && scanStatus >= 0) {
+    int n = scanStatus;
+    struct {
+      uint8_t mac[6];
+      int8_t rssi;
+      uint8_t channel;
+    } results[8];
+    int count = min(n, 8);
+    int idx[32];
+    for (int i = 0; i < n; i++) idx[i] = i;
+    for (int i = 0; i < n-1; i++) {
+      for (int j = i+1; j < n; j++) {
+        if (WiFi.RSSI(idx[j]) > WiFi.RSSI(idx[i])) {
+          int t = idx[i]; idx[i] = idx[j]; idx[j] = t;
+        }
+      }
+    }
+    for (int i = 0; i < count; i++) {
+      WiFi.BSSID(idx[i], results[i].mac);
+      results[i].rssi = WiFi.RSSI(idx[i]);
+      results[i].channel = WiFi.channel(idx[i]);
+    }
+    esp_now_send(rssiScanDestMac, (uint8_t*)results, count * sizeof(results[0]));
+    WiFi.scanDelete();
+    rssiScanRequested = false;
+  } else if (rssiScanRequested && scanStatus == -2) {
+    // Scan not started, start it now
+    WiFi.scanNetworks(true);
   }
 
   delay(20);  // Main loop delay
@@ -86,7 +138,6 @@ void loop() {
 void onReceive(uint8_t* mac, uint8_t* data, uint8_t len) {
   if (len == sizeof(currentCommand)) {
     memcpy(&currentCommand, data, len);
-
     switch (currentCommand.mode) {
       case 0:
         setDarkMode();
@@ -95,7 +146,8 @@ void onReceive(uint8_t* mac, uint8_t* data, uint8_t len) {
         // Pattern command received
         break;
       case 2:
-        sendRSSI(mac); // Pass requester MAC
+        memcpy(rssiScanDestMac, mac, 6);
+        rssiScanRequested = true;
         break;
       case 3:
         enterDeepSleep();
@@ -136,36 +188,6 @@ void enterDeepSleep() {
   Serial.println("Entering deep sleep...");
   FastLED.clear(); FastLED.show();
   ESP.deepSleep(0);  // Sleep until reset
-}
-
-void sendRSSI(uint8_t* destMac) {
-  int n = WiFi.scanNetworks();
-  if (n == 0) {
-    Serial.println("No networks found");
-    return;
-  }
-  struct {
-    uint8_t mac[6];
-    int8_t rssi;
-    uint8_t channel;
-  } results[8];
-  int count = min(n, 8);
-  int idx[32];
-  for (int i = 0; i < n; i++) idx[i] = i;
-  for (int i = 0; i < n-1; i++) {
-    for (int j = i+1; j < n; j++) {
-      if (WiFi.RSSI(idx[j]) > WiFi.RSSI(idx[i])) {
-        int t = idx[i]; idx[i] = idx[j]; idx[j] = t;
-      }
-    }
-  }
-  for (int i = 0; i < count; i++) {
-    WiFi.BSSID(idx[i], results[i].mac);
-    results[i].rssi = WiFi.RSSI(idx[i]);
-    results[i].channel = WiFi.channel(idx[i]);
-  }
-  esp_now_send(destMac, (uint8_t*)results, count * sizeof(results[0]));
-  WiFi.scanDelete();
 }
 
 void runLocalPatternCycle() {
