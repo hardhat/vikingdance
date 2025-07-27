@@ -6,75 +6,292 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
   <style>
-    body { font-family: sans-serif; padding: 2rem; }
-    form { margin-bottom: 2rem; }
-    input[type="number"] { width: 4em; }
-    button { margin-top: 1rem; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0;
+      padding: 2rem;
+      min-height: 100vh;
+      color: #333;
+    }
+    
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      backdrop-filter: blur(10px);
+    }
+    
+    h1 {
+      text-align: center;
+      color: #2c3e50;
+      margin-bottom: 2rem;
+      font-size: 2rem;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    h1 img {
+      vertical-align: middle;
+      margin-right: 10px;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    }
+    
+    .form-section {
+      background: #f8f9fa;
+      border-radius: 15px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      border: 1px solid #e9ecef;
+    }
+    
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid #dee2e6;
+      padding-bottom: 0.5rem;
+    }
+    
+    input[type="number"] {
+      width: 4em;
+      padding: 8px;
+      border: 2px solid #dee2e6;
+      border-radius: 8px;
+      font-size: 14px;
+      margin: 0 5px;
+      transition: border-color 0.3s ease;
+    }
+    
+    input[type="number"]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
     .color-grid {
       display: grid;
-      grid-template-columns: repeat(8, 30px);
-      gap: 2px;
-      margin: 10px 0;
+      grid-template-columns: repeat(8, 35px);
+      gap: 8px;
+      margin: 15px 0;
       justify-content: start;
       width: auto;
     }
-    .color-btn { width: 30px; height: 30px; border: 2px solid #ccc; cursor: pointer; }
-    .color-btn:hover { border-color: #000; }
-    .bpm-controls { display: flex; align-items: center; gap: 10px; }
-    .bpm-btn { width: 30px; height: 30px; }
-    .pattern-group { margin: 10px 0; }
-    .pattern-group input[type="radio"] { margin-right: 5px; }
-    .pattern-group label { margin-right: 15px; }
+    
+    .color-btn {
+      width: 35px;
+      height: 35px;
+      border: 3px solid #fff;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    .color-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      border-color: #333;
+    }
+    
+    .bpm-controls {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      justify-content: center;
+      background: #fff;
+      padding: 15px;
+      border-radius: 12px;
+      border: 2px solid #e9ecef;
+    }
+    
+    .bpm-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      font-size: 18px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .pattern-group {
+      margin: 15px 0;
+      background: #fff;
+      padding: 15px;
+      border-radius: 12px;
+      border: 2px solid #e9ecef;
+    }
+    
+    .pattern-group input[type="radio"] {
+      margin-right: 8px;
+      transform: scale(1.2);
+    }
+    
+    .pattern-group label {
+      margin-right: 20px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 5px 10px;
+      border-radius: 6px;
+      transition: background-color 0.2s ease;
+    }
+    
+    .pattern-group label:hover {
+      background-color: #f8f9fa;
+    }
+    
     .color-preview {
       display: inline-block;
-      width: 30px;
-      height: 30px;
-      border: 2px solid #888;
+      width: 35px;
+      height: 35px;
+      border: 3px solid #fff;
       vertical-align: middle;
-      margin-left: 8px;
+      margin-left: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    .color-inputs {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #fff;
+      padding: 15px;
+      border-radius: 12px;
+      border: 2px solid #e9ecef;
+      margin: 10px 0;
+    }
+    
+    .color-inputs label {
+      font-weight: 600;
+      color: #495057;
+      margin-right: 5px;
+    }
+    
+    .action-buttons {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 15px;
+      margin-top: 2rem;
+    }
+    
+    .action-buttons button {
+      margin: 0;
+    }
+    
+    .send-button {
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+      grid-column: 1 / -1;
+      font-size: 18px;
+      padding: 15px 30px;
+    }
+    
+    .dark-button {
+      background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    }
+    
+    .rssi-button {
+      background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    }
+    
+    .sleep-button {
+      background: linear-gradient(135deg, #fd7e14 0%, #e67e22 100%);
     }
   </style>
 </head>
 <body>
-  <h1><img src="/static/axehead.jpg" height=32 alt="Axehead"> Viking Necklace Control Panel</h1>
-  <form action="/send" method="post">
-    <div class="pattern-group">
-      <label>Pattern:</label><br>
-      <input type="radio" name="pattern" value="0" id="chase" checked><label for="chase">Chase</label>
-      <input type="radio" name="pattern" value="1" id="flash"><label for="flash">Flash</label>
-      <input type="radio" name="pattern" value="2" id="twinkle"><label for="twinkle">Twinkle</label>
-      <input type="radio" name="pattern" value="3" id="fade"><label for="fade">Fade</label>
-      <input type="radio" name="pattern" value="4" id="solid"><label for="solid">Solid</label>
+  <div class="container">
+    <h1><img src="/static/axehead.jpg" height=32 alt="Axehead"> Viking Necklace Control Panel</h1>
+    
+    <form action="/send" method="post">
+      <div class="form-section">
+        <div class="section-title">Pattern Selection</div>
+        <div class="pattern-group">
+          <input type="radio" name="pattern" value="0" id="chase" checked><label for="chase">Chase</label>
+          <input type="radio" name="pattern" value="1" id="flash"><label for="flash">Flash</label>
+          <input type="radio" name="pattern" value="2" id="twinkle"><label for="twinkle">Twinkle</label>
+          <input type="radio" name="pattern" value="3" id="fade"><label for="fade">Fade</label>
+          <input type="radio" name="pattern" value="4" id="solid"><label for="solid">Solid</label>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="section-title">Primary Color</div>
+        <div class="color-grid" id="primary-colors"></div>
+        <div class="color-inputs">
+          <label>R</label><input name="primary_r" type="number" value="255" id="primary_r" />
+          <label>G</label><input name="primary_g" type="number" value="0" id="primary_g" />
+          <label>B</label><input name="primary_b" type="number" value="0" id="primary_b" />
+          <span id="primary-preview" class="color-preview"></span>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="section-title">Secondary Color</div>
+        <div class="color-grid" id="secondary-colors"></div>
+        <div class="color-inputs">
+          <label>R</label><input name="secondary_r" type="number" value="0" id="secondary_r" />
+          <label>G</label><input name="secondary_g" type="number" value="0" id="secondary_g" />
+          <label>B</label><input name="secondary_b" type="number" value="255" id="secondary_b" />
+          <span id="secondary-preview" class="color-preview"></span>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="section-title">Animation Settings</div>
+        <div class="bpm-controls">
+          <label>BPM:</label>
+          <button type="button" class="bpm-btn" onclick="adjustBPM(-1)">-</button>
+          <input name="bpm" type="number" value="90" id="bpm" />
+          <button type="button" class="bpm-btn" onclick="adjustBPM(1)">+</button>
+        </div>
+        <div class="color-inputs" style="margin-top: 15px;">
+          <label>Flags:</label>
+          <input name="flags" type="number" value="0" />
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button type="submit" class="send-button">Send Pattern</button>
+      </div>
+    </form>
+
+    <div class="action-buttons">
+      <form action="/dark" method="post" style="margin: 0;"><button class="dark-button">Go Dark</button></form>
+      <form action="/rssi" method="post" style="margin: 0;"><button class="rssi-button">Request RSSI</button></form>
+      <form action="/sleep" method="post" style="margin: 0;"><button class="sleep-button">Put to Sleep</button></form>
     </div>
-
-    <label>Primary Color:</label>
-    <div class="color-grid" id="primary-colors"></div>
-    R <input name="primary_r" type="number" value="255" id="primary_r" />
-    G <input name="primary_g" type="number" value="0" id="primary_g" />
-    B <input name="primary_b" type="number" value="0" id="primary_b" />
-    <span id="primary-preview" class="color-preview"></span><br>
-
-    <label>Secondary Color:</label>
-    <div class="color-grid" id="secondary-colors"></div>
-    R <input name="secondary_r" type="number" value="0" id="secondary_r" />
-    G <input name="secondary_g" type="number" value="0" id="secondary_g" />
-    B <input name="secondary_b" type="number" value="255" id="secondary_b" />
-    <span id="secondary-preview" class="color-preview"></span><br>
-
-    <div class="bpm-controls">
-      <label>BPM:</label>
-      <button type="button" class="bpm-btn" onclick="adjustBPM(-1)">-</button>
-      <input name="bpm" type="number" value="90" id="bpm" />
-      <button type="button" class="bpm-btn" onclick="adjustBPM(1)">+</button>
-    </div><br>
-
-    <label>Flags: <input name="flags" type="number" value="0" /></label><br>
-    <button type="submit">Send Pattern</button>
-  </form>
-
-  <form action="/dark" method="post"><button>Go Dark</button></form>
-  <form action="/rssi" method="post"><button>Request RSSI</button></form>
-  <form action="/sleep" method="post"><button>Put to Sleep</button></form>
+  </div>
 
   <script>
     const colors = [
