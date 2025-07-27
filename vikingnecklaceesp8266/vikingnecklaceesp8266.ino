@@ -120,7 +120,8 @@ void loop() {
       }
     }
     for (int i = 0; i < count; i++) {
-      WiFi.BSSID(idx[i], results[i].mac);
+      uint8_t* bssid = WiFi.BSSID(idx[i]);
+      memcpy(results[i].mac, bssid, 6);
       results[i].rssi = WiFi.RSSI(idx[i]);
       results[i].channel = WiFi.channel(idx[i]);
     }

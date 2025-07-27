@@ -3,3 +3,4 @@ uvicorn
 jinja2
 pyserial
 python-multipart
+python-dotenv

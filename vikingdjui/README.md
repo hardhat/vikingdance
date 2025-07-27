@@ -10,4 +10,7 @@ Install requirements with:
 `pip install -r vikingdjui/requurements.txt`
 
 To start run:
-`uvicorn vikingdjui:app --reload`
+# Auto-detect serial port (default behavior)
+uvicorn vikingdjui:app --reload
+
+# Specify a serial port in .env property (SERIAL_PORT)

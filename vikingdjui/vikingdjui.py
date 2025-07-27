@@ -1,12 +1,18 @@
 import serial
 import serial.tools.list_ports
 import asyncio
+import sys
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import threading
 import re
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI()
 
@@ -29,9 +35,15 @@ def find_serial_port():
         return ports[0].device  # fallback: first port
     raise RuntimeError("No serial ports found")
 
-SERIAL_PORT = find_serial_port()
+# Use SERIAL_PORT from .env if provided, otherwise auto-detect
+SERIAL_PORT = os.getenv("SERIAL_PORT")
+if SERIAL_PORT:
+    print(f"Using SERIAL_PORT from .env: {SERIAL_PORT}")
+else:
+    SERIAL_PORT = find_serial_port()
+    print(f"Auto-detected serial port: {SERIAL_PORT}")
+
 BAUDRATE = 115200
-print(f"Using serial port: {SERIAL_PORT}")
 
 ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=1)
 

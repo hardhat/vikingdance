@@ -10,23 +10,64 @@
     form { margin-bottom: 2rem; }
     input[type="number"] { width: 4em; }
     button { margin-top: 1rem; }
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 30px);
+      gap: 2px;
+      margin: 10px 0;
+      justify-content: start;
+      width: auto;
+    }
+    .color-btn { width: 30px; height: 30px; border: 2px solid #ccc; cursor: pointer; }
+    .color-btn:hover { border-color: #000; }
+    .bpm-controls { display: flex; align-items: center; gap: 10px; }
+    .bpm-btn { width: 30px; height: 30px; }
+    .pattern-group { margin: 10px 0; }
+    .pattern-group input[type="radio"] { margin-right: 5px; }
+    .pattern-group label { margin-right: 15px; }
+    .color-preview {
+      display: inline-block;
+      width: 30px;
+      height: 30px;
+      border: 2px solid #888;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
   </style>
 </head>
 <body>
   <h1><img src="/static/axehead.jpg" height=32 alt="Axehead"> Viking Necklace Control Panel</h1>
   <form action="/send" method="post">
-    <label>Pattern: <input name="pattern" type="number" value="0" /></label><br>
-    <label>Primary Color: 
-      R <input name="primary_r" type="number" value="255" />
-      G <input name="primary_g" type="number" value="0" />
-      B <input name="primary_b" type="number" value="0" />
-    </label><br>
-    <label>Secondary Color: 
-      R <input name="secondary_r" type="number" value="0" />
-      G <input name="secondary_g" type="number" value="0" />
-      B <input name="secondary_b" type="number" value="255" />
-    </label><br>
-    <label>BPM: <input name="bpm" type="number" value="120" /></label><br>
+    <div class="pattern-group">
+      <label>Pattern:</label><br>
+      <input type="radio" name="pattern" value="0" id="chase" checked><label for="chase">Chase</label>
+      <input type="radio" name="pattern" value="1" id="flash"><label for="flash">Flash</label>
+      <input type="radio" name="pattern" value="2" id="twinkle"><label for="twinkle">Twinkle</label>
+      <input type="radio" name="pattern" value="3" id="fade"><label for="fade">Fade</label>
+      <input type="radio" name="pattern" value="4" id="solid"><label for="solid">Solid</label>
+    </div>
+
+    <label>Primary Color:</label>
+    <div class="color-grid" id="primary-colors"></div>
+    R <input name="primary_r" type="number" value="255" id="primary_r" />
+    G <input name="primary_g" type="number" value="0" id="primary_g" />
+    B <input name="primary_b" type="number" value="0" id="primary_b" />
+    <span id="primary-preview" class="color-preview"></span><br>
+
+    <label>Secondary Color:</label>
+    <div class="color-grid" id="secondary-colors"></div>
+    R <input name="secondary_r" type="number" value="0" id="secondary_r" />
+    G <input name="secondary_g" type="number" value="0" id="secondary_g" />
+    B <input name="secondary_b" type="number" value="255" id="secondary_b" />
+    <span id="secondary-preview" class="color-preview"></span><br>
+
+    <div class="bpm-controls">
+      <label>BPM:</label>
+      <button type="button" class="bpm-btn" onclick="adjustBPM(-1)">-</button>
+      <input name="bpm" type="number" value="90" id="bpm" />
+      <button type="button" class="bpm-btn" onclick="adjustBPM(1)">+</button>
+    </div><br>
+
     <label>Flags: <input name="flags" type="number" value="0" /></label><br>
     <button type="submit">Send Pattern</button>
   </form>
@@ -34,5 +75,73 @@
   <form action="/dark" method="post"><button>Go Dark</button></form>
   <form action="/rssi" method="post"><button>Request RSSI</button></form>
   <form action="/sleep" method="post"><button>Put to Sleep</button></form>
+
+  <script>
+    const colors = [
+      // Rainbow order
+      [255, 0, 0],      // Red
+      [255, 128, 0],    // Orange
+      [255, 255, 0],    // Yellow
+      [128, 255, 0],    // Chartreuse
+      [0, 255, 0],      // Green
+      [0, 255, 128],    // Spring Green
+      [0, 255, 255],    // Cyan
+      [0, 128, 255],    // Azure
+      [0, 0, 255],      // Blue
+      [128, 0, 255],    // Indigo
+      [255, 0, 255],    // Violet
+      [255, 0, 128],    // Rose
+      // Grays at the end
+      [255, 255, 255],  // White
+      [128, 128, 128],  // Gray
+      [64, 64, 64],     // Dark Gray
+      [0, 0, 0]         // Black
+    ];
+
+    function createColorButtons(containerId, targetPrefix) {
+      const container = document.getElementById(containerId);
+      colors.forEach(color => {
+        const btn = document.createElement('div');
+        btn.className = 'color-btn';
+        btn.style.backgroundColor = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+        btn.onclick = () => setColor(targetPrefix, color);
+        container.appendChild(btn);
+      });
+    }
+
+    function setColor(prefix, color) {
+      document.getElementById(prefix + '_r').value = color[0];
+      document.getElementById(prefix + '_g').value = color[1];
+      document.getElementById(prefix + '_b').value = color[2];
+      updatePreview(prefix);
+    }
+
+    function updatePreview(prefix) {
+      const r = document.getElementById(prefix + '_r').value;
+      const g = document.getElementById(prefix + '_g').value;
+      const b = document.getElementById(prefix + '_b').value;
+      document.getElementById(prefix + '-preview').style.backgroundColor = `rgb(${r},${g},${b})`;
+    }
+
+    // Update preview when number inputs change
+    ['primary', 'secondary'].forEach(prefix => {
+      ['_r', '_g', '_b'].forEach(suffix => {
+        document.getElementById(prefix + suffix).addEventListener('input', () => updatePreview(prefix));
+      });
+    });
+
+    // Initialize previews on page load
+    updatePreview('primary');
+    updatePreview('secondary');
+
+    function adjustBPM(delta) {
+      const bpmInput = document.getElementById('bpm');
+      const newValue = Math.max(1, parseInt(bpmInput.value) + delta);
+      bpmInput.value = newValue;
+    }
+
+    createColorButtons('primary-colors', 'primary');
+    createColorButtons('secondary-colors', 'secondary');
+  </script>
 </body>
 </html>
