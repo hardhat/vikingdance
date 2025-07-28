@@ -148,6 +148,7 @@ void onReceive(uint8_t* mac, uint8_t* data, uint8_t len) {
     switch (cmd->mode) {
       case 0:
         setDarkMode();
+        currentCommand.mode = 0;
         break;
       case 1:
         // Pattern command received
