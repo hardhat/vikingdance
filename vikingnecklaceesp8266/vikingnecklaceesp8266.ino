@@ -19,6 +19,7 @@
 #define COLOR_ORDER GRB
 
 CRGB leds[NUM_LEDS];
+unsigned long powerBudget = 125;  // In mA
 unsigned long buttonPressStart = 0;
 bool isButtonHeld = false;
 bool localMode = false;
@@ -45,12 +46,17 @@ unsigned long patternInterval = 50; // Default ms
 bool rssiScanRequested = false;
 uint8_t rssiScanDestMac[6];
 
+// Power management constants
+const uint8_t MAX_CURRENT_PER_LED_mA = 60;  // Maximum current per LED at full white
+const uint8_t BASE_CURRENT_mA = 20;         // ESP8266 base current consumption
+
 void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);  // GPIO0
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 
-  Serial.begin(115200);
+  //Serial.begin(115200);
+  Serial.begin(74880);
   delay(100);
 
   // Initialize LEDs
@@ -138,13 +144,15 @@ void loop() {
 
 void onReceive(uint8_t* mac, uint8_t* data, uint8_t len) {
   if (len == sizeof(currentCommand)) {
-    memcpy(&currentCommand, data, len);
-    switch (currentCommand.mode) {
+    struct_command *cmd = (struct_command*)data;
+    switch (cmd->mode) {
       case 0:
         setDarkMode();
         break;
       case 1:
         // Pattern command received
+        memcpy(&currentCommand, data, len);
+        runPattern(currentCommand);
         break;
       case 2:
         memcpy(rssiScanDestMac, mac, 6);
@@ -198,7 +206,45 @@ void runLocalPatternCycle() {
   delay(50);
 }
 
+// Calculate actual current draw of current LED state
+uint16_t calculateCurrentDraw() {
+  uint32_t totalBrightness = 0;
+  
+  for (int i = 0; i < NUM_LEDS; i++) {
+    // Calculate brightness as sum of R+G+B values
+    uint16_t ledBrightness = leds[i].r + leds[i].g + leds[i].b;
+    totalBrightness += ledBrightness;
+  }
+  
+  // Calculate current: (total brightness / max possible brightness) * max current
+  uint16_t maxPossibleBrightness = NUM_LEDS * 765; // 765 = 255*3 (max R+G+B)
+  uint16_t ledCurrent = (totalBrightness * (NUM_LEDS * MAX_CURRENT_PER_LED_mA)) / maxPossibleBrightness;
+  
+  return BASE_CURRENT_mA + ledCurrent;
+}
+
+// Calculate safe brightness level to stay within power budget
+uint8_t calculateSafeBrightness() {
+  // First, calculate what current draw would be at full brightness
+  uint16_t fullBrightnessCurrent = calculateCurrentDraw();
+  
+  if (fullBrightnessCurrent <= powerBudget) {
+    return 255; // Full brightness is safe
+  }
+  
+  // Calculate scaling factor to stay within budget
+  uint16_t availableCurrent = powerBudget - BASE_CURRENT_mA;
+  uint16_t ledCurrent = fullBrightnessCurrent - BASE_CURRENT_mA;
+  
+  if (ledCurrent == 0) return 255;
+  
+  uint16_t scaleFactor = (availableCurrent * 255) / ledCurrent;
+  return (scaleFactor > 255) ? 255 : (uint8_t)scaleFactor;
+}
+
 void runPattern(struct_command cmd) {
+  if(cmd.mode == 0) return;
+  
   switch (cmd.pattern) {
     case 0: // Chase
       static uint8_t chasePos = 0;
@@ -241,10 +287,26 @@ void runPattern(struct_command cmd) {
       }
       break;
   }
+  // Apply power budget-aware brightness
+  uint8_t safeBrightness = calculateSafeBrightness();
+  FastLED.setBrightness(safeBrightness);
   FastLED.show();
+  
+  // Optional: Debug output
+  if (Serial) {
+    uint16_t currentDraw = calculateCurrentDraw();
+    Serial.printf("Current draw: %dmA, Budget: %dmA, Brightness: %d/255\n", 
+                  currentDraw, (int)powerBudget, safeBrightness);
+  }
 }
 
 void setDarkMode() {
   FastLED.clear();
   FastLED.show();
+}
+
+// Add function to set power budget via serial or ESP-NOW
+void setPowerBudget(uint16_t budgetmA) {
+  powerBudget = constrain(budgetmA, BASE_CURRENT_mA + 10, 1000); // Reasonable limits
+  Serial.printf("Power budget set to %dmA\n", (int)powerBudget);
 }
