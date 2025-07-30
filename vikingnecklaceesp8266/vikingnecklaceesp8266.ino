@@ -189,7 +189,18 @@ void handleButton() {
 
   if (lastState == LOW && currentState == HIGH && !isButtonHeld) {
     localMode = !localMode;  // Toggle local mode
-    if (!localMode) {
+    if (localMode) {
+      // Turn off ESP-NOW radio (WiFi)
+      WiFi.disconnect();
+      WiFi.mode(WIFI_OFF);
+    } else {
+      // Turn WiFi/ESP-NOW back on
+      WiFi.mode(WIFI_STA);
+      WiFi.disconnect();
+      if (esp_now_init() == 0) {
+        esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
+        esp_now_register_recv_cb(onReceive);
+      }
       setDarkMode();
     }
     // Serial.println(localMode ? "Local mode ON" : "Local mode OFF");
@@ -211,7 +222,6 @@ void runLocalPatternCycle() {
   uint8_t safeBrightness = calculateSafeBrightness();
   FastLED.setBrightness(safeBrightness);
   FastLED.show();
-  delay(50);
 }
 
 // Calculate actual current draw of current LED state
