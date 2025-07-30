@@ -19,7 +19,8 @@
 #define COLOR_ORDER GRB
 
 CRGB leds[NUM_LEDS];
-unsigned long powerBudget = 125;  // In mA
+unsigned long powerBudget = 35;  // In mA
+unsigned long ledValueScale = 10;  // 1/10 for max brightness per channel
 unsigned long buttonPressStart = 0;
 bool isButtonHeld = false;
 bool localMode = false;
@@ -56,7 +57,7 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH);
 
   //Serial.begin(115200);
-  Serial.begin(74880);
+  // Serial.begin(74880);
   delay(100);
 
   // Initialize LEDs
@@ -69,7 +70,7 @@ void setup() {
   WiFi.disconnect();
 
   if (esp_now_init() != 0) {
-    Serial.println("ESP-NOW init failed");
+    // Serial.println("ESP-NOW init failed");
     return;
   }
 
@@ -188,14 +189,17 @@ void handleButton() {
 
   if (lastState == LOW && currentState == HIGH && !isButtonHeld) {
     localMode = !localMode;  // Toggle local mode
-    Serial.println(localMode ? "Local mode ON" : "Local mode OFF");
+    if (!localMode) {
+      setDarkMode();
+    }
+    // Serial.println(localMode ? "Local mode ON" : "Local mode OFF");
   }
 
   lastState = currentState;
 }
 
 void enterDeepSleep() {
-  Serial.println("Entering deep sleep...");
+  //Serial.println("Entering deep sleep...");
   FastLED.clear(); FastLED.show();
   ESP.deepSleep(0);  // Sleep until reset
 }
@@ -203,6 +207,9 @@ void enterDeepSleep() {
 void runLocalPatternCycle() {
   static uint8_t hue = 0;
   fill_rainbow(leds, NUM_LEDS, hue++, 7);
+  // Apply power budget-aware brightness
+  uint8_t safeBrightness = calculateSafeBrightness();
+  FastLED.setBrightness(safeBrightness);
   FastLED.show();
   delay(50);
 }
@@ -251,9 +258,9 @@ void runPattern(struct_command cmd) {
       static uint8_t chasePos = 0;
       for (int i = 0; i < NUM_LEDS; i++) {
         if (i == chasePos) {
-          leds[i] = CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2]);
+          leds[i] = CRGB(cmd.primary[0] / ledValueScale, cmd.primary[1] / ledValueScale, cmd.primary[2] / ledValueScale);
         } else {
-          leds[i] = CRGB(cmd.secondary[0], cmd.secondary[1], cmd.secondary[2]);
+          leds[i] = CRGB(cmd.secondary[0] / ledValueScale, cmd.secondary[1] / ledValueScale, cmd.secondary[2] / ledValueScale);
         }
       }
       chasePos = (chasePos + 1) % NUM_LEDS;
@@ -262,14 +269,14 @@ void runPattern(struct_command cmd) {
       static bool flashOn = false;
       flashOn = !flashOn;
       for (int i = 0; i < NUM_LEDS; i++) {
-        leds[i] = flashOn ? CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2])
-                         : CRGB(cmd.secondary[0], cmd.secondary[1], cmd.secondary[2]);
+        leds[i] = flashOn ? CRGB(cmd.primary[0] / ledValueScale, cmd.primary[1] / ledValueScale, cmd.primary[2] / ledValueScale)
+                         : CRGB(cmd.secondary[0] / ledValueScale, cmd.secondary[1] / ledValueScale, cmd.secondary[2] / ledValueScale);
       }
       break;
     case 2: // Twinkle
       for (int i = 0; i < NUM_LEDS; i++) {
-        leds[i] = (random(2) == 0) ? CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2])
-                                  : CRGB(cmd.secondary[0], cmd.secondary[1], cmd.secondary[2]);
+        leds[i] = (random(2) == 0) ? CRGB(cmd.primary[0] / ledValueScale, cmd.primary[1] / ledValueScale, cmd.primary[2] / ledValueScale)
+                                  : CRGB(cmd.secondary[0] / ledValueScale, cmd.secondary[1] / ledValueScale, cmd.secondary[2] / ledValueScale);
       }
       break;
     case 3: // Fade
@@ -278,13 +285,15 @@ void runPattern(struct_command cmd) {
       fadeVal += fadeDir * 8;
       if (fadeVal == 0 || fadeVal >= 255) fadeDir = -fadeDir;
       for (int i = 0; i < NUM_LEDS; i++) {
-        leds[i] = blend(CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2]),
-                        CRGB(cmd.secondary[0], cmd.secondary[1], cmd.secondary[2]), fadeVal);
+        leds[i] = blend(
+          CRGB(cmd.primary[0] / ledValueScale, cmd.primary[1] / ledValueScale, cmd.primary[2] / ledValueScale),
+          CRGB(cmd.secondary[0] / ledValueScale, cmd.secondary[1] / ledValueScale, cmd.secondary[2] / ledValueScale),
+          fadeVal);
       }
       break;
     default: // Solid primary
       for (int i = 0; i < NUM_LEDS; i++) {
-        leds[i] = CRGB(cmd.primary[0], cmd.primary[1], cmd.primary[2]);
+        leds[i] = CRGB(cmd.primary[0] / ledValueScale, cmd.primary[1] / ledValueScale, cmd.primary[2] / ledValueScale);
       }
       break;
   }
@@ -294,11 +303,11 @@ void runPattern(struct_command cmd) {
   FastLED.show();
   
   // Optional: Debug output
-  if (Serial) {
-    uint16_t currentDraw = calculateCurrentDraw();
-    Serial.printf("Current draw: %dmA, Budget: %dmA, Brightness: %d/255\n", 
-                  currentDraw, (int)powerBudget, safeBrightness);
-  }
+  // if (Serial) {
+  //   uint16_t currentDraw = calculateCurrentDraw();
+  //   Serial.printf("Current draw: %dmA, Budget: %dmA, Brightness: %d/255\n", 
+  //                 currentDraw, (int)powerBudget, safeBrightness);
+  // }
 }
 
 void setDarkMode() {
@@ -309,5 +318,5 @@ void setDarkMode() {
 // Add function to set power budget via serial or ESP-NOW
 void setPowerBudget(uint16_t budgetmA) {
   powerBudget = constrain(budgetmA, BASE_CURRENT_mA + 10, 1000); // Reasonable limits
-  Serial.printf("Power budget set to %dmA\n", (int)powerBudget);
+  // Serial.printf("Power budget set to %dmA\n", (int)powerBudget);
 }
