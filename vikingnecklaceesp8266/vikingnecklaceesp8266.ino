@@ -24,6 +24,27 @@ unsigned long ledValueScale = 10;  // 1/10 for max brightness per channel
 unsigned long buttonPressStart = 0;
 bool isButtonHeld = false;
 bool localMode = false;
+bool networkMode = false;
+uint8_t localPatternIndex = 0;
+uint8_t networkPatternIndex = 0;
+uint8_t localPrimary[3] = {255, 0, 0};
+uint8_t localSecondary[3] = {0, 0, 255};
+
+const uint8_t colorList[][3] = {
+  {255, 0, 0},      // Red
+  {255, 128, 0},    // Orange
+  {255, 255, 0},    // Yellow
+  {128, 255, 0},    // Chartreuse
+  {0, 255, 0},      // Green
+  {0, 255, 128},    // Spring Green
+  {0, 255, 255},    // Cyan
+  {0, 128, 255},    // Azure
+  {0, 0, 255},      // Blue
+  {128, 0, 255},    // Indigo
+  {255, 0, 255},    // Violet
+  {255, 0, 128}     // Rose
+};
+const uint8_t colorListSize = sizeof(colorList) / sizeof(colorList[0]);
 
 // Replace this with your DJ booth MAC or use broadcast for global
 uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -39,6 +60,7 @@ typedef struct struct_command {
   uint32_t timestamp;
 } struct_command;
 
+
 struct_command currentCommand;
 
 unsigned long lastPatternUpdate = 0;
@@ -51,14 +73,26 @@ uint8_t rssiScanDestMac[6];
 const uint8_t MAX_CURRENT_PER_LED_mA = 60;  // Maximum current per LED at full white
 const uint8_t BASE_CURRENT_mA = 20;         // ESP8266 base current consumption
 
+// Function prototypes for forward declarations
+void runPattern(struct_command cmd);
+uint8_t calculateSafeBrightness();
+
 void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);  // GPIO0
+  pinMode(DATA_PIN, INPUT_PULLUP);    // GPIO2 as input for mode selection
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 
-  //Serial.begin(115200);
-  // Serial.begin(74880);
-  delay(100);
+  delay(200); // Wait for power-up debounce
+
+  // Determine mode: if GPIO2 is LOW, start network mode, else local mode
+  if (digitalRead(DATA_PIN) == LOW) {
+    networkMode = true;
+    localMode = false;
+  } else {
+    networkMode = false;
+    localMode = true;
+  }
 
   // Initialize LEDs
   FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS);
@@ -66,22 +100,20 @@ void setup() {
   FastLED.show();
 
   // Wi-Fi and ESP-NOW init
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-
-  if (esp_now_init() != 0) {
-    // Serial.println("ESP-NOW init failed");
-    return;
+  if (networkMode) {
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect();
+    if (esp_now_init() != 0) {
+      return;
+    }
+    esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
+    esp_now_register_recv_cb(onReceive);
+    sendJoin();
+    setDarkMode();
+  } else {
+    localPatternIndex = 0;
+    pickRandomLocalColors();
   }
-
-  esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
-  esp_now_register_recv_cb(onReceive);
-
-  // Send join packet
-  sendJoin();
-
-  // Start in dark mode until command or local mode takes over
-  setDarkMode();
 }
 
 void loop() {
@@ -100,6 +132,11 @@ void loop() {
       runLocalPatternCycle();
       lastPatternUpdate = now;
     }
+  } else if (networkMode) {
+    if (now - lastPatternUpdate >= patternInterval) {
+      runPatternWithIndex(networkPatternIndex, currentCommand);
+      lastPatternUpdate = now;
+    }
   } else {
     if (now - lastPatternUpdate >= patternInterval) {
       runPattern(currentCommand);
@@ -107,37 +144,39 @@ void loop() {
     }
   }
 
-  // Handle asynchronous RSSI scan
-  int scanStatus = WiFi.scanComplete();
-  if (rssiScanRequested && scanStatus >= 0) {
-    int n = scanStatus;
-    struct {
-      uint8_t mac[6];
-      int8_t rssi;
-      uint8_t channel;
-    } results[8];
-    int count = min(n, 8);
-    int idx[32];
-    for (int i = 0; i < n; i++) idx[i] = i;
-    for (int i = 0; i < n-1; i++) {
-      for (int j = i+1; j < n; j++) {
-        if (WiFi.RSSI(idx[j]) > WiFi.RSSI(idx[i])) {
-          int t = idx[i]; idx[i] = idx[j]; idx[j] = t;
+  if(!localMode && rssiScanRequested) {
+    // Handle asynchronous RSSI scan
+    int scanStatus = WiFi.scanComplete();
+    if (rssiScanRequested && scanStatus >= 0) {
+      int n = scanStatus;
+      struct {
+        uint8_t mac[6];
+        int8_t rssi;
+        uint8_t channel;
+      } results[8];
+      int count = min(n, 8);
+      int idx[32];
+      for (int i = 0; i < n; i++) idx[i] = i;
+      for (int i = 0; i < n-1; i++) {
+        for (int j = i+1; j < n; j++) {
+          if (WiFi.RSSI(idx[j]) > WiFi.RSSI(idx[i])) {
+            int t = idx[i]; idx[i] = idx[j]; idx[j] = t;
+          }
         }
       }
+      for (int i = 0; i < count; i++) {
+        uint8_t* bssid = WiFi.BSSID(idx[i]);
+        memcpy(results[i].mac, bssid, 6);
+        results[i].rssi = WiFi.RSSI(idx[i]);
+        results[i].channel = WiFi.channel(idx[i]);
+      }
+      esp_now_send(rssiScanDestMac, (uint8_t*)results, count * sizeof(results[0]));
+      WiFi.scanDelete();
+      rssiScanRequested = false;
+    } else if (rssiScanRequested && scanStatus == -2) {
+      // Scan not started, start it now
+      WiFi.scanNetworks(true);
     }
-    for (int i = 0; i < count; i++) {
-      uint8_t* bssid = WiFi.BSSID(idx[i]);
-      memcpy(results[i].mac, bssid, 6);
-      results[i].rssi = WiFi.RSSI(idx[i]);
-      results[i].channel = WiFi.channel(idx[i]);
-    }
-    esp_now_send(rssiScanDestMac, (uint8_t*)results, count * sizeof(results[0]));
-    WiFi.scanDelete();
-    rssiScanRequested = false;
-  } else if (rssiScanRequested && scanStatus == -2) {
-    // Scan not started, start it now
-    WiFi.scanNetworks(true);
   }
 
   delay(20);  // Main loop delay
@@ -188,22 +227,15 @@ void handleButton() {
   }
 
   if (lastState == LOW && currentState == HIGH && !isButtonHeld) {
-    localMode = !localMode;  // Toggle local mode
     if (localMode) {
-      // Turn off ESP-NOW radio (WiFi)
-      WiFi.disconnect();
-      WiFi.mode(WIFI_OFF);
-    } else {
-      // Turn WiFi/ESP-NOW back on
-      WiFi.mode(WIFI_STA);
-      WiFi.disconnect();
-      if (esp_now_init() == 0) {
-        esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
-        esp_now_register_recv_cb(onReceive);
-      }
-      setDarkMode();
+      // Cycle through local patterns and pick random colors
+      localPatternIndex = (localPatternIndex + 1) % 5; // 0=rainbow, 1=chase, 2=flash, 3=twinkle, 4=fade
+      pickRandomLocalColors();
+    } else if (networkMode) {
+      // Pick random pattern and colors until next network command
+      networkPatternIndex = random(5); // 0=chase, 1=flash, 2=twinkle, 3=fade, 4=solid
+      pickRandomNetworkColors();
     }
-    // Serial.println(localMode ? "Local mode ON" : "Local mode OFF");
   }
 
   lastState = currentState;
@@ -216,9 +248,49 @@ void enterDeepSleep() {
 }
 
 void runLocalPatternCycle() {
-  static uint8_t hue = 0;
-  fill_rainbow(leds, NUM_LEDS, hue++, 7);
-  // Apply power budget-aware brightness
+  switch (localPatternIndex) {
+    case 0: // Rainbow
+      static uint8_t hue = 0;
+      fill_rainbow(leds, NUM_LEDS, hue++, 7);
+      break;
+    case 1: // Chase
+      static uint8_t chasePos = 0;
+      for (int i = 0; i < NUM_LEDS; i++) {
+        if (i == chasePos) {
+          leds[i] = CRGB(localPrimary[0] / ledValueScale, localPrimary[1] / ledValueScale, localPrimary[2] / ledValueScale);
+        } else {
+          leds[i] = CRGB(localSecondary[0] / ledValueScale, localSecondary[1] / ledValueScale, localSecondary[2] / ledValueScale);
+        }
+      }
+      chasePos = (chasePos + 1) % NUM_LEDS;
+      break;
+    case 2: // Flash
+      static bool flashOn = false;
+      flashOn = !flashOn;
+      for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = flashOn ? CRGB(localPrimary[0] / ledValueScale, localPrimary[1] / ledValueScale, localPrimary[2] / ledValueScale)
+                         : CRGB(localSecondary[0] / ledValueScale, localSecondary[1] / ledValueScale, localSecondary[2] / ledValueScale);
+      }
+      break;
+    case 3: // Twinkle
+      for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = (random(2) == 0) ? CRGB(localPrimary[0] / ledValueScale, localPrimary[1] / ledValueScale, localPrimary[2] / ledValueScale)
+                                  : CRGB(localSecondary[0] / ledValueScale, localSecondary[1] / ledValueScale, localSecondary[2] / ledValueScale);
+      }
+      break;
+    case 4: // Fade
+      static uint8_t fadeVal = 0;
+      static int fadeDir = 1;
+      fadeVal += fadeDir * 8;
+      if (fadeVal == 0 || fadeVal >= 255) fadeDir = -fadeDir;
+      for (int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = blend(
+          CRGB(localPrimary[0] / ledValueScale, localPrimary[1] / ledValueScale, localPrimary[2] / ledValueScale),
+          CRGB(localSecondary[0] / ledValueScale, localSecondary[1] / ledValueScale, localSecondary[2] / ledValueScale),
+          fadeVal);
+      }
+      break;
+  }
   uint8_t safeBrightness = calculateSafeBrightness();
   FastLED.setBrightness(safeBrightness);
   FastLED.show();
@@ -261,9 +333,11 @@ uint8_t calculateSafeBrightness() {
 }
 
 void runPattern(struct_command cmd) {
-  if(cmd.mode == 0) return;
-  
-  switch (cmd.pattern) {
+  runPatternWithIndex(cmd.pattern, cmd);
+}
+
+void runPatternWithIndex(uint8_t patternIdx, struct_command cmd) {
+  switch (patternIdx) {
     case 0: // Chase
       static uint8_t chasePos = 0;
       for (int i = 0; i < NUM_LEDS; i++) {
@@ -301,13 +375,12 @@ void runPattern(struct_command cmd) {
           fadeVal);
       }
       break;
-    default: // Solid primary
+    case 4: // Solid primary
       for (int i = 0; i < NUM_LEDS; i++) {
         leds[i] = CRGB(cmd.primary[0] / ledValueScale, cmd.primary[1] / ledValueScale, cmd.primary[2] / ledValueScale);
       }
       break;
   }
-  // Apply power budget-aware brightness
   uint8_t safeBrightness = calculateSafeBrightness();
   FastLED.setBrightness(safeBrightness);
   FastLED.show();
@@ -329,4 +402,24 @@ void setDarkMode() {
 void setPowerBudget(uint16_t budgetmA) {
   powerBudget = constrain(budgetmA, BASE_CURRENT_mA + 10, 1000); // Reasonable limits
   // Serial.printf("Power budget set to %dmA\n", (int)powerBudget);
+}
+
+void pickRandomLocalColors() {
+  uint8_t idx1 = random(colorListSize);
+  uint8_t idx2 = random(colorListSize);
+  while (idx2 == idx1) idx2 = random(colorListSize);
+  memcpy(localPrimary, colorList[idx1], 3);
+  memcpy(localSecondary, colorList[idx2], 3);
+}
+
+void pickRandomNetworkColors() {
+  uint8_t idx1 = random(colorListSize);
+  uint8_t idx2 = random(colorListSize);
+  while (idx2 == idx1) idx2 = random(colorListSize);
+  currentCommand.primary[0] = colorList[idx1][0];
+  currentCommand.primary[1] = colorList[idx1][1];
+  currentCommand.primary[2] = colorList[idx1][2];
+  currentCommand.secondary[0] = colorList[idx2][0];
+  currentCommand.secondary[1] = colorList[idx2][1];
+  currentCommand.secondary[2] = colorList[idx2][2];
 }
